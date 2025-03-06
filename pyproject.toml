@@ -1,0 +1,29 @@
+[project]
+name = "lactomeda"
+version = "0.1.0"
+description = "Multipurpose Bot"
+authors = [
+    {name = "Josue",email = "josue.medina9991@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "yt-dlp (>=2025.2.19,<2026.0.0)",
+    "python-decouple (>=3.8,<4.0)",
+    "pynacl (>=1.5.0,<2.0.0)",
+    "discord (>=2.3.2,<3.0.0)",
+]
+
+[tool.poetry.scripts]
+start-bot = "lactomeda.__main__:main"
+
+
+[tool.poetry]
+# ...
+packages = [
+    { include = "lactomeda", from = "src" },
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
