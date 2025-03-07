@@ -1,5 +1,6 @@
 import asyncio
 from collections import deque
+from lactomeda.config.constants import MusicProvider
 from lactomeda.modules.base import LactomedaModule
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from . import DISCORD_TOKEN
@@ -25,8 +26,9 @@ class LactomedaDiscord(LactomedaModule):
         self.tree = app_commands.CommandTree(self.client)
         
         self.downloader = Downloader()
-        self.voice_channel = {}
+        self.music_provider = MusicProvider() 
         
+        self.voice_channel = {}
         self.queue_songs = {}
         
         
@@ -42,8 +44,6 @@ class LactomedaDiscord(LactomedaModule):
             self._log_message("Conectado a un canal de voz")
             return voice_client
         
-        
-    
     async def play_next(self, guild_id):
         self._log_message(f"Reproduciendo la siguiente musica")
         if self.queue_songs[guild_id]:
@@ -67,7 +67,12 @@ class LactomedaDiscord(LactomedaModule):
         except Exception as e:
             self._error_message(e)
         
-
+    async def analyze_url(self, url):
+        splited_url = url.split(".")
+        if self.music_provider.YOUTUBE in splited_url:
+            return self.music_provider.YOUTUBE
+        elif self.music_provider.SPOTIFY in splited_url:
+            return self.music_provider.SPOTIFY
             
     def run(self):
         
@@ -104,24 +109,31 @@ class LactomedaDiscord(LactomedaModule):
                 
                 #if query == word -> spotify or deezer 
                 #if query == url -> check if it is from youtube, spotify or deezer etc..
+                music_provider = await self.analyze_url(query)
                 
-                #if query and youtube url 
-                song, title,playlist = await self.downloader.yt_download(query)
-                self.queue_songs[guild_id].append({"title":title, "song":song})
-                
-            
-                if not voice_client.is_playing():
-                    await self.play_next(guild_id)
-                    if playlist:
-                        songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
+                match music_provider:
+                    case self.music_provider.YOUTUBE:
                         
-                        for i,song in enumerate(songs):
-                            self.queue_songs[guild_id].append({"title":titles[i], "song":song})
-                else:
-                    print(self.queue_songs)
-                    await interaction.channel.send("Ya estas reproduciendo una musica")
-    
-            
+                        song, title,playlist = await self.downloader.yt_download(query)
+                        self.queue_songs[guild_id].append({"title":title, "song":song})
+                        
+                    
+                        if not voice_client.is_playing():
+                            await self.play_next(guild_id)
+                            if playlist:
+                                songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
+                                
+                                for i,song in enumerate(songs):
+                                    self.queue_songs[guild_id].append({"title":titles[i], "song":song})
+                        else:
+                            print(self.queue_songs)
+                            await interaction.channel.send("Ya estas reproduciendo una musica")
+
+                    case self.music_provider.SPOTIFY:
+                        pass
+                    
+                    
+                    
             except Exception as e:
                 self._error_message(e)
         

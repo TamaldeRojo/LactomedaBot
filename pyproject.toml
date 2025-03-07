@@ -16,6 +16,7 @@ dependencies = [
 
 [tool.poetry.scripts]
 start-bot = "lactomeda.__main__:main"
+start-test = "lactomeda.tests.test:main"
 
 
 [tool.poetry]
