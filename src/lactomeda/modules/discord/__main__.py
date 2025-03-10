@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 from lactomeda.config.constants import MusicProvider
 from lactomeda.modules.base import LactomedaModule
+from lactomeda.modules.discord.modals.music import MusicView
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from . import DISCORD_TOKEN
 import discord
@@ -47,7 +48,11 @@ class LactomedaDiscord(LactomedaModule):
     async def play_next(self, guild_id):
         self._log_message(f"Reproduciendo la siguiente musica")
         if self.queue_songs[guild_id]:
-            song = self.queue_songs[guild_id].popleft()
+            if self.queue_songs[guild_id]:
+                song = self.queue_songs[guild_id].popleft()
+            else:
+                self._log_message("No hay más canciones en la cola")
+                return
             self._log_message(f"Reproduciendo {song["title"]}")
             self._log_message(f"Siguientes: \n {self.queue_songs[guild_id]}")
             player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG)
@@ -73,6 +78,8 @@ class LactomedaDiscord(LactomedaModule):
             return self.music_provider.YOUTUBE
         elif self.music_provider.SPOTIFY in splited_url:
             return self.music_provider.SPOTIFY
+        else:
+            return None
             
     def run(self):
         
@@ -98,44 +105,72 @@ class LactomedaDiscord(LactomedaModule):
             try:
                 songs = []
                 titles = []
-                
+                spotify_songs = []
+                is_spotify_playlist = False
+                        
                 guild_id = interaction.guild.id
                 voice_client = await self.join_voice(interaction)
                 voice_client = self.voice_channel[guild_id]
                 
                 if guild_id not in self.queue_songs:
                     self.queue_songs[guild_id] = deque()
-                # await interaction.response.defer()
+                    
+                await interaction.response.defer()
                 
-                #if query == word -> spotify or deezer 
-                #if query == url -> check if it is from youtube, spotify or deezer etc..
                 music_provider = await self.analyze_url(query)
                 
                 match music_provider:
                     case self.music_provider.YOUTUBE:
-                        
-                        song, title,playlist = await self.downloader.yt_download(query)
-                        self.queue_songs[guild_id].append({"title":title, "song":song})
-                        
-                    
-                        if not voice_client.is_playing():
-                            await self.play_next(guild_id)
-                            if playlist:
-                                songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
-                                
-                                for i,song in enumerate(songs):
-                                    self.queue_songs[guild_id].append({"title":titles[i], "song":song})
-                        else:
-                            print(self.queue_songs)
-                            await interaction.channel.send("Ya estas reproduciendo una musica")
+                        song, title, playlist = await self.downloader.yt_download(query)
 
                     case self.music_provider.SPOTIFY:
-                        pass
+                        
+                        if query.startswith("https://open.spotify.com/playlist/") or query.startswith("https://open.spotify.com/album/"):
+                            is_spotify_playlist = True
+                            results = await self.downloader.get_spotify_names_from_playlist(query)
+                            for item in results['items']:
+                                track = item['track']
+                                track_name = track['name']
+                                artist_name = track['artists'][0]['name']
+                                spotify_songs.append(f"{track_name} - {artist_name}")
                     
+                            song_name = spotify_songs.pop(0)
+                        else: 
+                        
+                            song_name = self.downloader.get_spotify_song_name(query)
+                            
+                        print(song_name)
+                        song, title, playlist = await self.downloader.yt_download(song_name, is_name=True)
                     
+                    case None:
+                        song, title, playlist = await self.downloader.yt_download(query, is_name=True)
                     
+                self.queue_songs[guild_id].append({"title":title, "song":song})
+                if not voice_client.is_playing():
+                    
+                    await self.play_next(guild_id)
+                    view = MusicView(self.client , self.queue_songs[guild_id])
+                    await interaction.followup.send("Música reproducida", view=view)
+                    
+                    if is_spotify_playlist:
+                        for song in spotify_songs:
+                            song, title, playlist = await self.downloader.yt_download(song, is_name=True)
+                            self.queue_songs[guild_id].append({"title":title, "song":song})
+                    elif playlist:
+                        songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
+                        
+                        for i,song in enumerate(songs):
+                            self.queue_songs[guild_id].append({"title":titles[i], "song":song})
+                            
+                    # print(any(song["title"] == title for song in self.queue_songs[guild_id]))
+                else:
+                    await interaction.channel.send("Ya estas reproduciendo una musica")
+                            
             except Exception as e:
                 self._error_message(e)
+        
+        
+     
         
         self.client.run(DISCORD_TOKEN)
         
