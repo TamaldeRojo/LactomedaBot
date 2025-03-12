@@ -28,8 +28,23 @@ class MusicView(discord.ui.View):
             await interaction.response.edit_message(content="▶️ Música Reanudada",view=self)
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser reanudada",view=self)
+            
+            
+            
+    @discord.ui.button(label="<<", style=discord.ButtonStyle.gray, row=1)
+    async def skip_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        print("[+] Reproduciendo la música anterior")
+        voice_client = discord.utils.get(self.client.voice_clients, guild=interaction.guild)
+        if voice_client and voice_client.is_playing():
+            voice_client.stop()
+            self.current_index[0] -= 2 # 2 pq se va a sumar despues 1
+            if self.current_index[0] < -1:
+                self.current_index[0] = -1
+            await interaction.response.edit_message(content="✔ Reproduciendo la música anterior",view=self)
+        else:
+            await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
 
-    @discord.ui.button(label="Detener", style=discord.ButtonStyle.red)
+    @discord.ui.button(label="❌ Quitar", style=discord.ButtonStyle.red, row=1)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         print("[+] Quitando la música")
         voice_client = discord.utils.get(self.client.voice_clients, guild=interaction.guild)
@@ -45,21 +60,7 @@ class MusicView(discord.ui.View):
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser detenida",view=self)
 
-    @discord.ui.button(label="<<", style=discord.ButtonStyle.gray)
-    async def skip_back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        print("[+] Reproduciendo la música anterior")
-        voice_client = discord.utils.get(self.client.voice_clients, guild=interaction.guild)
-        if voice_client and voice_client.is_playing():
-            voice_client.stop()
-            self.current_index[0] -= 2 # 2 pq se va a sumar despues 1
-            if self.current_index[0] < -1:
-                self.current_index[0] = -1
-            await interaction.response.edit_message(content="✔ Reproduciendo la música anterior",view=self)
-        else:
-            await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
-
-
-    @discord.ui.button(label=">>", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label=">>", style=discord.ButtonStyle.gray, row=1)
     async def skip_front(self, interaction: discord.Interaction, button: discord.ui.Button):
         print("[+] Saltando la música")
         voice_client = discord.utils.get(self.client.voice_clients, guild=interaction.guild)

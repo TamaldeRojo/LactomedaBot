@@ -147,19 +147,19 @@ class LactomedaDiscord(LactomedaModule):
                 
                 
                 self.queue_songs[guild_id].append({"title":title, "song":song})
-                if self.is_spotify_playlist:
-                        print("Flag 1: ", spotify_songs)    
-                        for song in spotify_songs:
-                            song, title, playlist = await asyncio.create_task(self.downloader.yt_download(song, is_name=True))
-                            self.queue_songs[guild_id].append({"title":title, "song":song})
                             
                 if not voice_client.is_playing():
                     
-                    await self.play_next(guild_id)
+                    asyncio.create_task(self.play_next(guild_id))
                     print("after play next")
+                    if self.is_spotify_playlist:
+                            print("Flag 1: ", spotify_songs)    
+                            for song in spotify_songs:
+                                song, title, playlist = await asyncio.create_task(self.downloader.yt_download(song, is_name=True))
+                                self.queue_songs[guild_id].append({"title":title, "song":song})
                             
                     view = MusicView(self.client , self.queue_songs[guild_id],self.current_index, self.is_stopped)
-                    await interaction.followup.send("Música reproducida", view=view)
+                    await interaction.followup.send(view=view)
                     
                     if playlist:
                         songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
