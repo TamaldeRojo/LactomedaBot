@@ -10,7 +10,6 @@ from discord.ext import commands
 from discord import app_commands
 import yt_dlp
 
-GUILD_ID = 990342596717080596
 
 
 class LactomedaDiscord(LactomedaModule):
@@ -30,9 +29,10 @@ class LactomedaDiscord(LactomedaModule):
         self.music_provider = MusicProvider() 
         
         self.voice_channel = {}
-        self.queue_songs = {}
-        
-        
+        self.queue_songs = {} #Canciones que se van a reproducir
+        self.current_index = [0] # se tiene que resetear cuando se detenga el bot o salga
+        self.is_stopped = [False] #Boton detener musica, es una lista para que sea inmutable xd
+        self.is_spotify_playlist = False
     
     async def join_voice(self, interaction: discord.Interaction):
         if interaction.user.voice is None:
@@ -46,22 +46,24 @@ class LactomedaDiscord(LactomedaModule):
             return voice_client
         
     async def play_next(self, guild_id):
-        self._log_message(f"Reproduciendo la siguiente musica")
         if self.queue_songs[guild_id]:
-            if self.queue_songs[guild_id]:
-                song = self.queue_songs[guild_id].popleft()
-            else:
-                self._log_message("No hay más canciones en la cola")
-                return
+            song = self.queue_songs[guild_id][self.current_index[0]]
             self._log_message(f"Reproduciendo {song["title"]}")
-            self._log_message(f"Siguientes: \n {self.queue_songs[guild_id]}")
-            player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG)
-            voice_client = self.voice_channel[guild_id]
-            voice_client.play(player, after=lambda e: self.safe_play_next(guild_id))
-            
-    def safe_play_next(self, guild_id):
+        else:
+            self._log_message("No hay más canciones en la cola")
+            return
+        
+        player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG)
+        voice_client = self.voice_channel[guild_id]
+        voice_client.play(player, after=lambda e: self.safe_play_next(guild_id,song))
+        
+    def safe_play_next(self, guild_id, song):
+        self.current_index[0] += 1
+        print("After func: ",self.current_index[0])
+        if self.is_stopped[0]:
+            return
         loop = self.client.loop  
-    
+
         if loop.is_closed():
             print("Event loop is closed. Cannot schedule play_next.")
             return
@@ -106,12 +108,13 @@ class LactomedaDiscord(LactomedaModule):
                 songs = []
                 titles = []
                 spotify_songs = []
-                is_spotify_playlist = False
-                        
+                self.is_stopped[0] = False
+                self.is_spotify_playlist = False
+     
                 guild_id = interaction.guild.id
                 voice_client = await self.join_voice(interaction)
                 voice_client = self.voice_channel[guild_id]
-                
+ 
                 if guild_id not in self.queue_songs:
                     self.queue_songs[guild_id] = deque()
                     
@@ -126,51 +129,59 @@ class LactomedaDiscord(LactomedaModule):
                     case self.music_provider.SPOTIFY:
                         
                         if query.startswith("https://open.spotify.com/playlist/") or query.startswith("https://open.spotify.com/album/"):
-                            is_spotify_playlist = True
+                            self.is_spotify_playlist = True
                             results = await self.downloader.get_spotify_names_from_playlist(query)
                             for item in results['items']:
                                 track = item['track']
                                 track_name = track['name']
                                 artist_name = track['artists'][0]['name']
                                 spotify_songs.append(f"{track_name} - {artist_name}")
-                    
                             song_name = spotify_songs.pop(0)
                         else: 
-                        
                             song_name = self.downloader.get_spotify_song_name(query)
                             
-                        print(song_name)
                         song, title, playlist = await self.downloader.yt_download(song_name, is_name=True)
                     
                     case None:
                         song, title, playlist = await self.downloader.yt_download(query, is_name=True)
-                    
+                
+                
                 self.queue_songs[guild_id].append({"title":title, "song":song})
+                if self.is_spotify_playlist:
+                        print("Flag 1: ", spotify_songs)    
+                        for song in spotify_songs:
+                            song, title, playlist = await asyncio.create_task(self.downloader.yt_download(song, is_name=True))
+                            self.queue_songs[guild_id].append({"title":title, "song":song})
+                            
                 if not voice_client.is_playing():
                     
                     await self.play_next(guild_id)
-                    view = MusicView(self.client , self.queue_songs[guild_id])
+                    print("after play next")
+                            
+                    view = MusicView(self.client , self.queue_songs[guild_id],self.current_index, self.is_stopped)
                     await interaction.followup.send("Música reproducida", view=view)
                     
-                    if is_spotify_playlist:
-                        for song in spotify_songs:
-                            song, title, playlist = await self.downloader.yt_download(song, is_name=True)
-                            self.queue_songs[guild_id].append({"title":title, "song":song})
-                    elif playlist:
+                    if playlist:
                         songs, titles = await self.downloader.yt_download(playlist, is_playlist=True)
                         
                         for i,song in enumerate(songs):
                             self.queue_songs[guild_id].append({"title":titles[i], "song":song})
                             
-                    # print(any(song["title"] == title for song in self.queue_songs[guild_id]))
+                            
+                    
                 else:
                     await interaction.channel.send("Ya estas reproduciendo una musica")
                             
             except Exception as e:
                 self._error_message(e)
         
-        
-     
+        @self.tree.command(name="debug", description="Debugea cosas")
+        async def debug(interaction: discord.Interaction):
+            await interaction.response.defer()
+            self._log_message(f"Index: {self.current_index[0]}")
+            self._log_message([song['title'] for song in self.queue_songs[interaction.guild.id]])    
+            self._log_message(asyncio.all_tasks()) 
+            await interaction.channel.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
         
         self.client.run(DISCORD_TOKEN)
         
