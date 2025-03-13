@@ -1,20 +1,18 @@
 import asyncio
 from collections import deque
-from lactomeda.config.constants import MusicProvider
+from lactomeda.config.constants import MusicProvider, MusicURL, SpecialNames
 from lactomeda.modules.base import LactomedaModule
-from lactomeda.modules.discord.modals.music import MusicView
+from lactomeda.modules.discord.views.music import MusicView
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from . import DISCORD_TOKEN
 import discord
-from discord.ext import commands
 from discord import app_commands
-import yt_dlp
 
 
 
 class LactomedaDiscord(LactomedaModule):
     
-    FFMPEG = {  
+    FFMPEG_OPTIONS = {  
         'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
         'options': '-vn'
         }
@@ -53,7 +51,7 @@ class LactomedaDiscord(LactomedaModule):
             self._log_message("No hay más canciones en la cola")
             return
         
-        player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG)
+        player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG_OPTIONS)
         voice_client = self.voice_channel[guild_id]
         voice_client.play(player, after=lambda e: self.safe_play_next(guild_id,song))
         
@@ -95,7 +93,7 @@ class LactomedaDiscord(LactomedaModule):
             if message.author.bot:
                 return
             
-            if message.author.name in ["zeropatos","zer0woo"]:
+            if message.author.name in [SpecialNames.BELOVED,SpecialNames.BELOVED_2ND]:
                     await message.add_reaction("❤️")
             
 
@@ -128,7 +126,7 @@ class LactomedaDiscord(LactomedaModule):
 
                     case self.music_provider.SPOTIFY:
                         
-                        if query.startswith("https://open.spotify.com/playlist/") or query.startswith("https://open.spotify.com/album/"):
+                        if query.startswith(MusicURL.SPOTIFY_PLAYLIST) or query.startswith(MusicURL.SPOTIFY_ALBUM):
                             self.is_spotify_playlist = True
                             results = await self.downloader.get_spotify_names_from_playlist(query)
                             for item in results['items']:
@@ -151,9 +149,7 @@ class LactomedaDiscord(LactomedaModule):
                 if not voice_client.is_playing():
                     
                     asyncio.create_task(self.play_next(guild_id))
-                    print("after play next")
                     if self.is_spotify_playlist:
-                            print("Flag 1: ", spotify_songs)    
                             for song in spotify_songs:
                                 song, title, playlist = await asyncio.create_task(self.downloader.yt_download(song, is_name=True))
                                 self.queue_songs[guild_id].append({"title":title, "song":song})
@@ -170,7 +166,7 @@ class LactomedaDiscord(LactomedaModule):
                             
                     
                 else:
-                    await interaction.channel.send("Ya estas reproduciendo una musica")
+                    await interaction
                             
             except Exception as e:
                 self._error_message(e)
