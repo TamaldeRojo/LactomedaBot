@@ -6,7 +6,6 @@ from lactomeda.modules.discord.views.music import MusicView
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from . import DISCORD_TOKEN
 import discord
-from discord import app_commands
 
 
 
@@ -20,8 +19,7 @@ class LactomedaDiscord(LactomedaModule):
     def __init__(self):
         self.intents = discord.Intents.default()
         self.intents.message_content = True
-        self.client = discord.Client(intents=self.intents)
-        self.tree = app_commands.CommandTree(self.client)
+        self.bot = discord.Bot(intents=self.intents)
         
         self.downloader = Downloader()
         self.music_provider = MusicProvider() 
@@ -60,7 +58,7 @@ class LactomedaDiscord(LactomedaModule):
         print("After func: ",self.current_index[0])
         if self.is_stopped[0]:
             return
-        loop = self.client.loop  
+        loop = self.bot.loop  
 
         if loop.is_closed():
             print("Event loop is closed. Cannot schedule play_next.")
@@ -83,12 +81,11 @@ class LactomedaDiscord(LactomedaModule):
             
     def run(self):
         
-        @self.client.event
+        @self.bot.event
         async def on_ready():
-            print(f"Logged in as {self.client.user}")
-            await self.tree.sync()
+            print(f"Logged in as {self.bot.user}")
         
-        @self.client.event
+        @self.bot.event
         async def on_message(message):
             if message.author.bot:
                 return
@@ -99,9 +96,9 @@ class LactomedaDiscord(LactomedaModule):
 
             
         
-        @self.tree.command(name="play", description="Reproduce musica en el canal de voz")
-        @app_commands.describe(query="URL de la musica")
+        @self.bot.slash_command(name="play")
         async def play(interaction: discord.Interaction, query: str):
+            """URL de la musica"""
             try:
                 songs = []
                 titles = []
@@ -154,7 +151,7 @@ class LactomedaDiscord(LactomedaModule):
                                 song, title, playlist = await asyncio.create_task(self.downloader.yt_download(song, is_name=True))
                                 self.queue_songs[guild_id].append({"title":title, "song":song})
                             
-                    view = MusicView(self.client , self.queue_songs[guild_id],self.current_index, self.is_stopped)
+                    view = MusicView(self.bot , self.queue_songs[guild_id],self.current_index, self.is_stopped)
                     await interaction.followup.send(view=view)
                     
                     if playlist:
@@ -166,18 +163,22 @@ class LactomedaDiscord(LactomedaModule):
                             
                     
                 else:
-                    await interaction
+                    self._log_message(f"Musica Agregada: {title}")
+                    await interaction.followup.send("Musica Agregada",ephemeral=True)
                             
             except Exception as e:
                 self._error_message(e)
         
-        @self.tree.command(name="debug", description="Debugea cosas")
+        @self.bot.slash_command(name="debug")
         async def debug(interaction: discord.Interaction):
-            await interaction.response.defer()
-            self._log_message(f"Index: {self.current_index[0]}")
-            self._log_message([song['title'] for song in self.queue_songs[interaction.guild.id]])    
-            self._log_message(asyncio.all_tasks()) 
-            await interaction.channel.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
+            try:
+                await interaction.response.defer()
+                self._log_message(f"Index: {self.current_index[0]}")
+                self._log_message([song['title'] for song in self.queue_songs[interaction.guild.id]])    
+                self._log_message(asyncio.all_tasks()) 
+                await interaction.channel.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
+            except Exception as e:
+                self._error_message(e)
         
-        self.client.run(DISCORD_TOKEN)
+        self.bot.run(DISCORD_TOKEN)
         
