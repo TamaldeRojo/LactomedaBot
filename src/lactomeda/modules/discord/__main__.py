@@ -1,11 +1,12 @@
 import asyncio
 from collections import deque
-from lactomeda.config.constants import MusicProvider, MusicURL, SpecialNames
+from lactomeda.config.constants import Language, MusicProvider, MusicURL, SpecialNames
 from lactomeda.modules.base import LactomedaModule
+from lactomeda.modules.discord.plugins.Listener import Listener 
 from lactomeda.modules.discord.views.music import MusicView
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from . import DISCORD_TOKEN
-import discord
+import discord, torch, whisper
 
 
 
@@ -16,10 +17,16 @@ class LactomedaDiscord(LactomedaModule):
         'options': '-vn'
         }
     
+    
     def __init__(self):
         self.intents = discord.Intents.default()
         self.intents.message_content = True
+        self.intents.voice_states = True
         self.bot = discord.Bot(intents=self.intents)
+        
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Using {device} device")
+        self.model = whisper.load_model("small").to(device)
         
         self.downloader = Downloader()
         self.music_provider = MusicProvider() 
@@ -37,10 +44,33 @@ class LactomedaDiscord(LactomedaModule):
             
         if interaction.guild.voice_client is None:
             voice_client = await interaction.user.voice.channel.connect()
+            
             self.voice_channel[voice_client.guild.id] = voice_client
             self._log_message("Conectado a un canal de voz")
+            
+            try:
+                asyncio.create_task(self.listener_handler(voice_client))
+            except Exception as e:
+                self._error_message(e)
             return voice_client
+    
+    async def listener_handler(self, voice_client):
+        sink = discord.sinks.WaveSink()
+        voice_client.start_recording(sink, lambda *_: None)
         
+        while voice_client.is_connected():
+            await asyncio.sleep(3)
+            audio_bytes = sink.get_all_audio()
+            with open("temp_audio.wav", "wb") as f:
+                f.write(audio_bytes[0].getvalue())
+            result = self.model.transcribe("temp_audio.wav",language=Language.ES)
+            text = result["text"].strip()
+            if text:
+                print("Escuche: " + text)
+                if "hola" in text.lower():
+                    print("Hola!, te escucho correctamente")
+                        
+    
     async def play_next(self, guild_id, view: MusicView):
         if not self.queue_songs[guild_id] or len(self.queue_songs[guild_id]) == 0:
             self._log_message("No hay cola de canciones")
@@ -108,7 +138,6 @@ class LactomedaDiscord(LactomedaModule):
                     await message.add_reaction("❤️")
             
 
-            
         
         @self.bot.slash_command(name="play")
         async def play(interaction: discord.Interaction, query: str):
@@ -210,11 +239,12 @@ class LactomedaDiscord(LactomedaModule):
         @self.bot.slash_command(name="debug")
         async def debug(interaction: discord.Interaction):
             try:
-                await interaction.response.defer()
-                self._log_message(f"Index: {self.current_index[0]}")
-                self._log_message([song['title'] for song in self.queue_songs[interaction.guild.id]])    
-                # self._log_message(asyncio.all_tasks()) 
-                await interaction.followup.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
+                await self.join_voice(interaction)
+                # await interaction.response.defer()
+                # self._log_message(f"Index: {self.current_index[0]}")
+                # self._log_message([song['title'] for song in self.queue_songs[interaction.guild.id]])    
+                # # self._log_message(asyncio.all_tasks()) 
+                # await interaction.followup.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
             except Exception as e:
                 self._error_message(e)
         

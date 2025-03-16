@@ -31,3 +31,8 @@ class Denials:
 
 class AltImgs:
     EMBED_ALT_IMG = "https://i.pinimg.com/736x/62/c2/bf/62c2bfd3e4d2c91b3fb3e1414a3643fa.jpg"
+    
+
+class Language:
+    ES = "es"
+    EN = "en"
