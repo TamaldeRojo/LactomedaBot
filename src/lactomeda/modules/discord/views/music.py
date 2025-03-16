@@ -1,6 +1,8 @@
 import discord
 from collections import deque
 
+from lactomeda.config.constants import AltImgs
+
 class MusicView(discord.ui.View): 
     def __init__(self, bot ,queue_songs: deque, current_index: list, is_stopped: list):
         super().__init__(timeout=None)
@@ -51,7 +53,7 @@ class MusicView(discord.ui.View):
             )
             embed.add_field(name="Artist", value=song.get('artist', 'Unknown'), inline=False)
             embed.add_field(name="Duration", value=song.get('duration', 'Unknown'), inline=True)
-            embed.set_image(url=song.get('img_url', "https://i.pinimg.com/736x/62/c2/bf/62c2bfd3e4d2c91b3fb3e1414a3643fa.jpg"))
+            embed.set_image(url=song.get('img_url', AltImgs.EMBED_ALT_IMG))
             
             queue_embed = discord.Embed(
                 title="🎵 Queue",

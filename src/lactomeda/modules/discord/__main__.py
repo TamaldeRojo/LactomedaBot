@@ -42,7 +42,6 @@ class LactomedaDiscord(LactomedaModule):
             return voice_client
         
     async def play_next(self, guild_id, view: MusicView):
-        print(self.current_index[0])
         if not self.queue_songs[guild_id] or len(self.queue_songs[guild_id]) == 0:
             self._log_message("No hay cola de canciones")
         
