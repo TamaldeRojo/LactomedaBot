@@ -7,7 +7,11 @@ class Config:
 
 class MusicProvider:
     SPOTIFY = "spotify"
+    SPOTIFY_ALBUM = "spotify_album"
+    SPOTIFY_PLAYLIST = "spotify_playlist"
+    
     YOUTUBE = "youtube"
+    YOUTUBE_PLAYLIST = "list"
     DEEZER = "deezer"
     
     
@@ -19,3 +23,7 @@ class MusicURL:
 class SpecialNames:
     BELOVED = "zeropatos"
     BELOVED_2ND = "zer0woo"
+    
+
+class Denials:
+    QUERY_DENIALS = ["playlist", "playlists", "list", "lists", "album", "albums", "full album", "tracks"]
