@@ -4,19 +4,17 @@ from collections import deque
 from lactomeda.config.constants import AltImgs
 
 class MusicView(discord.ui.View): 
-    def __init__(self, bot ,queue_songs: deque, current_index: list, is_stopped: list):
+    def __init__(self, bot , server_configuration):
         super().__init__(timeout=None)
-        self.is_stopped = is_stopped
         self.bot = bot
-        self.queue_songs = queue_songs
-        self.current_index = current_index
+        self.server_configuration = server_configuration
         self.embed_index = 0
         self.embeds = []
         self.message = None  
     
     async def send_initial_message(self, interaction: discord.Interaction):
         """Sends the initial embed and stores the message reference."""
-        first_song = self.queue_songs[0]
+        first_song = self.server_configuration["queue_songs"][0]
         initial_embed = await self.create_embeds(first_song)
         self.message = await interaction.followup.send(embed=initial_embed, view=self)
 
@@ -35,7 +33,10 @@ class MusicView(discord.ui.View):
             self.skip_front.disabled = True
             self.view_queue.disabled = True
             await self.update_message(last_embed)
-            self.queue_songs.clear()
+            self.server_configuration["queue_songs"].clear()
+            self.server_configuration["index_shuffle"].clear()
+            self.server_configuration["is_shuffle"] = False
+            self.server_configuration["current_index"] = -1
             return
         
         self.pause.disabled = False
@@ -57,7 +58,7 @@ class MusicView(discord.ui.View):
             
             queue_embed = discord.Embed(
                 title="🎵 Queue",
-                description="\n".join([f"**{song['title']}** - {song['artist']}" for song in self.queue_songs]),
+                description="\n".join([f"**{song['title']}** - {song['artist']}" for song in self.server_configuration["queue_songs"]]),
                 color=discord.Color.random()
             )
             self.embeds = [embed, queue_embed]
@@ -101,12 +102,13 @@ class MusicView(discord.ui.View):
         if voice_client and voice_client.is_playing():
             
             print("[+] Quitando la música")
-            self.is_stopped[0] = True
-            self.current_index[0] = -1
+            self.server_configuration["is_stopped"] = True
+            self.server_configuration["current_index"] = -1
+            self.server_configuration["queue_songs"].clear()
             
-            self.queue_songs.clear()
+            await self.update_message(self.embeds[1])
             voice_client.stop()
-            self.embed.clear_fields()
+            # self.embeds[0].clear_fields()
             await voice_client.disconnect()
             
             await interaction.response.edit_message(content="❌ Música Detenida, no hay nada en la lista",view=self)
@@ -119,9 +121,9 @@ class MusicView(discord.ui.View):
         if voice_client and voice_client.is_playing():
             print("[+] Reproduciendo la música anterior")
             voice_client.stop()
-            self.current_index[0] -= 2 # 2 pq se va a sumar despues 1
-            if self.current_index[0] < -1:
-                self.current_index[0] = -1
+            self.server_configuration["current_index"] -= 2 # 2 pq se va a sumar despues 1
+            if self.server_configuration["current_index"] < -1:
+                self.server_configuration["current_index"] = -1
             await interaction.response.edit_message(content="✔ Reproduciendo la música anterior",view=self)
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
@@ -137,9 +139,22 @@ class MusicView(discord.ui.View):
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
 
+    @discord.ui.button(label="Aleatorio", style=discord.ButtonStyle.gray, row=1)
+    async def shuffle_queue(self,  button: discord.ui.Button, interaction: discord.Interaction):
+        if len(self.server_configuration["queue_songs"]) > 0:
+            self.server_configuration["is_shuffle"] = True
+            last_song_indexes = list(range(self.server_configuration["current_index"] + 1))
+            for index in last_song_indexes:
+                self.server_configuration["index_shuffle"].append(index)
+            await interaction.response.edit_message(content="Musica en cola en modo aleatorio",view=self)
+        else:
+            await interaction.response.edit_message(content="❌ Trabajo en ello okay?",view=self)
+
+    
+    
     @discord.ui.button(label="🔲", style=discord.ButtonStyle.gray, row=1)
     async def view_queue(self,  button: discord.ui.Button, interaction: discord.Interaction):
-        if len(self.queue_songs) > 0:
-            await interaction.response.edit_message(content="✔ Reproduciendo la música siguiente",view=self)
+        if len(self.server_configuration["queue_songs"]) > 0:
+            await interaction.response.edit_message(content="En progreso...",view=self)
         else:
-            await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
+            await interaction.response.edit_message(content="❌ Trabajo en ello okay?",view=self)

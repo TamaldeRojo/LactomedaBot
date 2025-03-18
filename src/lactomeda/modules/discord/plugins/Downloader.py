@@ -3,23 +3,32 @@ from spotipy.oauth2 import SpotifyClientCredentials
 import re
 from lactomeda.config.constants import Denials
 from lactomeda.modules.base import LactomedaModule
-from lactomeda.modules.discord import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
-
+from lactomeda.config.lactomeda_config import LactomedaConfig
 
 #https://open.spotify.com/playlist/6pER44X99fa5VbqIkagRgv?si=hNyu_yRUTQqHoATZMk3Itg
 
-class Downloader(LactomedaModule):
-    
-    yt_dlp_options = {
+YTDLP_OPTIONS = {
                 'format': 'bestaudio/best',
                 'default_search': 'ytsearch',
                 'quiet': True,
                 'ignore_no_formats_error': True                
             }
+SINGLE_YTDLP_OPTIONS = {
+        'format': 'bestaudio/best',
+        'noplaylist': True, 
+        'default_search': 'ytsearch',
+        'quiet': True,
+        'outtmpl': 'songs/%(title)s.%(ext)s'
+    }
+
+class Downloader(LactomedaModule):
+    
+    
         
     def __init__(self):
-        self.sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET))
-        pass
+        self.lactomeda_config = LactomedaConfig.get_instance()
+        self.sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(self.lactomeda_config.spotify_client_id, self.lactomeda_config.spotify_client_secret))
+        self.current_ytdlp_options = YTDLP_OPTIONS
     
     
     
@@ -48,9 +57,11 @@ class Downloader(LactomedaModule):
     async def run(self):
         pass 
     
-    async def yt_download(self,query, is_playlist=False, is_name=False):
+    async def yt_download(self,query, is_playlist=False):
         
-        with yt_dlp.YoutubeDL(self.yt_dlp_options) as ytdl:
+        self.current_ytdlp_options = YTDLP_OPTIONS if is_playlist else SINGLE_YTDLP_OPTIONS
+        
+        with yt_dlp.YoutubeDL(self.current_ytdlp_options) as ytdl:
               
             
             if is_playlist:
@@ -68,15 +79,29 @@ class Downloader(LactomedaModule):
               
             else:  
                 download_index = 0
-                if not self.is_url(query):
-                    query += " cancion"
+                entries = None
+                # if not self.is_url(query):
+                #     query += " cancion"
                 data = await asyncio.to_thread(lambda: ytdl.extract_info(query, download=False))   
                 
-                if bool(set(map(str.lower, data['entries'][0]['title'].split(" "))) & set(map(str.lower, Denials.QUERY_DENIALS))):
-                    download_index += 1
-                
-                self._log_message("Cancion lista")  
                 if 'entries' in data:
+                    entries = data['entries']
+                else:
+                    self._error_message("No se encontró ninguna música.")
+                    raise NotImplementedError
+                    
+                while download_index < len(entries) and bool(
+                        set(map(str.lower, entries[download_index]['title'].split())) 
+                        & set(map(str.lower, Denials.QUERY_DENIALS))
+                    ):
+                        download_index += 1
+                        
+                if download_index >= len(entries):
+                    self._error_message("No se encontró ninguna música después de filtrar.")
+                    raise NotImplementedError
+
+                if entries:
+                    self._log_message("Cancion lista")  
                     return data['entries'][download_index]['url'], data['entries'][download_index]['title'], data['entries'][download_index]['uploader'], data['entries'][download_index]['duration'], data['entries'][download_index]['thumbnail']
                 else:
                     self._error_message("No se encontro ninguna musica")
