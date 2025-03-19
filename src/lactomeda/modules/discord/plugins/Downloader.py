@@ -29,7 +29,7 @@ class Downloader(LactomedaModule):
         self.lactomeda_config = LactomedaConfig.get_instance()
         self.sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(self.lactomeda_config.spotify_client_id, self.lactomeda_config.spotify_client_secret))
         self.current_ytdlp_options = YTDLP_OPTIONS
-    
+        self._flag = False
     
     
     def is_url(self, query: str):
@@ -78,10 +78,6 @@ class Downloader(LactomedaModule):
                 return [songs,titles,artists,durations,img_url]
               
             else:  
-                download_index = 0
-                entries = None
-                # if not self.is_url(query):
-                #     query += " cancion"
                 data = await asyncio.to_thread(lambda: ytdl.extract_info(query, download=False))   
                 
                 if 'entries' in data:
@@ -90,19 +86,22 @@ class Downloader(LactomedaModule):
                     self._error_message("No se encontró ninguna música.")
                     raise NotImplementedError
                     
-                while download_index < len(entries) and bool(
-                        set(map(str.lower, entries[download_index]['title'].split())) 
-                        & set(map(str.lower, Denials.QUERY_DENIALS))
-                    ):
-                        download_index += 1
-                        
-                if download_index >= len(entries):
-                    self._error_message("No se encontró ninguna música después de filtrar.")
-                    raise NotImplementedError
-
-                if entries:
-                    self._log_message("Cancion lista")  
-                    return data['entries'][download_index]['url'], data['entries'][download_index]['title'], data['entries'][download_index]['uploader'], data['entries'][download_index]['duration'], data['entries'][download_index]['thumbnail']
+                valid_entries = [
+                    entry for entry in entries
+                    if not (set(map(str.lower, entry['title'].split())) & set(map(str.lower, Denials.QUERY_DENIALS)))
+                ]
+       
+                if not valid_entries:
+                    query += " cancion"
+                    self._log_message(f"intentando de nuevo con query modificado, {query}")
+                    if not self._flag:
+                        self._flag = True
+                        return await self.yt_download(query)
+                    else:
+                        self._error_message("No se encontró ninguna música después de filtrar.")
+                        return 
+                    
                 else:
-                    self._error_message("No se encontro ninguna musica")
-                    raise NotImplementedError
+                    self._log_message("Cancion lista") 
+                    best_match = valid_entries[0] 
+                    return best_match['url'], best_match['title'], best_match['uploader'], best_match['duration'], best_match['thumbnail']  

@@ -26,7 +26,11 @@ class SpecialNames:
     
 
 class Denials:
-    QUERY_DENIALS = ["playlist", "playlists", "list", "lists", "album", "albums", "full album", "tracks"]
+    QUERY_DENIALS = [
+        "playlist", "playlists", "list", "lists",
+        "album", "albums", "full album", "album}","album)","(album)","(fullalbum)" "fullalbum","(album"
+        "tracks",
+        ]
     
 
 class AltImgs:

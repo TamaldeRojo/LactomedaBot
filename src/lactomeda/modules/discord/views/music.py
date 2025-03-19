@@ -108,7 +108,7 @@ class MusicView(discord.ui.View):
             
             await self.update_message(self.embeds[1])
             voice_client.stop()
-            # self.embeds[0].clear_fields()
+            self.embeds[0].clear_fields()
             await voice_client.disconnect()
             
             await interaction.response.edit_message(content="❌ Música Detenida, no hay nada en la lista",view=self)
