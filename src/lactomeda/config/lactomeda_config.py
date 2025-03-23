@@ -53,6 +53,7 @@ class LactomedaConfig:
             "is_shuffle": False,
             "index_shuffle": deque(),
             "is_back_skip": False,
+            "conversation_history": deque(),
             "default_music_channel": 1352430281390555199#1071894534021189803
         }
     
