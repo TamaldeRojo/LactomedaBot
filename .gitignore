@@ -6,3 +6,6 @@ __pycache__/
 .cache
 temp_audio.wav
 temp_audio.mp3
+
+# specific files
+personality/

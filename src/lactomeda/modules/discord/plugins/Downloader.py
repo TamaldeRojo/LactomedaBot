@@ -10,15 +10,31 @@ from lactomeda.config.lactomeda_config import LactomedaConfig
 YTDLP_OPTIONS = {
                 'format': 'bestaudio/best',
                 'default_search': 'ytsearch',
+                  "postprocessors": [{
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }],
                 'quiet': True,
-                'ignore_no_formats_error': True                
+                'ignore_no_formats_error': True,
+                'get_bypass': True,
+                "lazy_playlist": True,
+                                
             }
 SINGLE_YTDLP_OPTIONS = {
         'format': 'bestaudio/best',
         'noplaylist': True, 
         'default_search': 'ytsearch',
+        "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }],
         'quiet': True,
-        'outtmpl': 'songs/%(title)s.%(ext)s'
+        'outtmpl': 'songs/%(title)s.%(ext)s',
+        'get_bypass': True,
+        "lazy_playlist": True,
+
     }
 
 class Downloader(LactomedaModule):
@@ -81,15 +97,14 @@ class Downloader(LactomedaModule):
                 data = await asyncio.to_thread(lambda: ytdl.extract_info(query, download=False))   
                 
                 if 'entries' in data:
-                    entries = data['entries']
+                    entries = data['entries']    
+                    valid_entries = [
+                        entry for entry in entries
+                        if not (set(map(str.lower, entry['title'].split())) & set(map(str.lower, Denials.QUERY_DENIALS)))
+                    ]
                 else:
-                    self._error_message("No se encontró ninguna música.")
-                    raise NotImplementedError
-                    
-                valid_entries = [
-                    entry for entry in entries
-                    if not (set(map(str.lower, entry['title'].split())) & set(map(str.lower, Denials.QUERY_DENIALS)))
-                ]
+                    valid_entries = [data]
+                    # self._error_message("No se encontró ninguna música.")
        
                 if not valid_entries:
                     query += " cancion"

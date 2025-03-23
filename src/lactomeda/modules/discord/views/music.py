@@ -1,6 +1,5 @@
 import discord
 from collections import deque
-
 from lactomeda.config.constants import AltImgs
 
 class MusicView(discord.ui.View): 
@@ -8,15 +7,20 @@ class MusicView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
         self.server_configuration = server_configuration
+        music_channel_id = server_configuration.get("default_music_channel")
+        self.default_music_channel = bot.get_channel(music_channel_id)
         self.embed_index = 0
         self.embeds = []
         self.message = None  
     
-    async def send_initial_message(self, interaction: discord.Interaction):
+    async def send_initial_message(self, interaction):
         """Sends the initial embed and stores the message reference."""
         first_song = self.server_configuration["queue_songs"][0]
         initial_embed = await self.create_embeds(first_song)
-        self.message = await interaction.followup.send(embed=initial_embed, view=self)
+        try:
+            self.message = await interaction.followup.send(embed=initial_embed, view=self)
+        except:
+            self.message = await self.default_music_channel.send(embed=initial_embed, view=self)
 
     async def create_embeds(self, song: deque = None, is_last_song: bool = False) -> discord.Embed:
         """Creates an embed for the currently playing song."""
@@ -32,6 +36,7 @@ class MusicView(discord.ui.View):
             self.skip_back.disabled = True
             self.skip_front.disabled = True
             self.view_queue.disabled = True
+            self.shuffle_queue.disabled = True
             await self.update_message(last_embed)
             self.server_configuration["queue_songs"].clear()
             self.server_configuration["index_shuffle"].clear()
@@ -56,6 +61,7 @@ class MusicView(discord.ui.View):
             embed.add_field(name="Duration", value=song.get('duration', 'Unknown'), inline=True)
             embed.set_image(url=song.get('img_url', AltImgs.EMBED_ALT_IMG))
             
+            #Needs to add a limit of titles to display btw
             queue_embed = discord.Embed(
                 title="🎵 Queue",
                 description="\n".join([f"**{song['title']}** - {song['artist']}" for song in self.server_configuration["queue_songs"]]),
@@ -121,9 +127,14 @@ class MusicView(discord.ui.View):
         if voice_client and voice_client.is_playing():
             print("[+] Reproduciendo la música anterior")
             voice_client.stop()
-            self.server_configuration["current_index"] -= 2 # 2 pq se va a sumar despues 1
-            if self.server_configuration["current_index"] < -1:
-                self.server_configuration["current_index"] = -1
+            if not self.server_configuration["is_shuffle"]:
+                self.server_configuration["current_index"] -= 2 # 2 pq se va a sumar despues 1
+                if self.server_configuration["current_index"] < -1:
+                    self.server_configuration["current_index"] = -1
+            else:
+                self.server_configuration["is_back_skip"] = True
+                self.server_configuration["index_shuffle"].pop()
+                self.server_configuration["current_index"] = self.server_configuration["index_shuffle"].pop()
             await interaction.response.edit_message(content="✔ Reproduciendo la música anterior",view=self)
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)

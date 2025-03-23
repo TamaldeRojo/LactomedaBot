@@ -1,7 +1,5 @@
 
 # CONSTANTS
-
-
 class Config:
     pass
 
@@ -40,3 +38,14 @@ class AltImgs:
 class Language:
     ES = "es"
     EN = "en"
+    
+class DiscordCommands:
+    SLASH_COMMANDS = {
+        "/play": "used to play a song, supports spotify, and youtube",
+        "/debug": "used to debug the bot"
+    }
+    LACTOMEDA_ORDERS = {
+        "/play": "PLAY_ORDER",
+        "/debug": "DEBUG_ORDER",
+        "join": "JOIN_ORDER"
+    }

@@ -1,22 +1,23 @@
 import asyncio
 from collections import deque
+import json
+import re
+from lactomeda.config import constants
 from lactomeda.config.constants import Language, MusicProvider, MusicURL, SpecialNames
 from lactomeda.modules.base import LactomedaModule
+from lactomeda.modules.discord.cogs.commands import play_command
 from lactomeda.modules.discord.plugins.Listener import Listener 
+from lactomeda.modules.discord.plugins.ai_client import AIClient
 from lactomeda.modules.discord.views.music import MusicView
-from lactomeda.modules.discord.plugins.Downloader import Downloader
 import discord, torch, whisper, os
 from lactomeda.config.lactomeda_config import LactomedaConfig
+from utils.fake_interaction import FakeInteraction
 from utils.random_int import random_int
 
 
 class LactomedaDiscord(LactomedaModule):
     
-    FFMPEG_OPTIONS = {  
-        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-        'options': '-vn'
-        }
-    
+   
     
     def __init__(self):
         self.lactomeda_setup = LactomedaConfig.get_instance()
@@ -24,15 +25,14 @@ class LactomedaDiscord(LactomedaModule):
         self.intents.message_content = True
         self.intents.voice_states = True
         self.bot = discord.Bot(intents=self.intents)
+        self.lactomeda_setup.bot_loop = self.bot.loop
         
         # device = "cuda" if torch.cuda.is_available() else "cpu"
         # print(f"Using {device} device")
         # self.model = whisper.load_model("small").to(device)
         
-        self.downloader = Downloader()
-        self.music_provider = MusicProvider() 
+        self.ai_client = AIClient()
         
-        self.embed = None
         self.voice_channel = {}
     
     async def join_voice(self, interaction: discord.Interaction):
@@ -94,91 +94,18 @@ class LactomedaDiscord(LactomedaModule):
     #                 print("Hola!, te escucho correctamente")
                     
     #         sink.audio_data.clear()
-                        
+                                     
+    # async def execute_slash_command(self, interaction):
+    #     command = self.bot.get_application_command('play')
+    #     if command:
+    #         await play_command(interaction, self.bot, args[0] if args else "")
     
-    async def play_next(self, guild_id, view: MusicView):
-        server_configuration = self.lactomeda_setup.get_server_config(guild_id)
-     
-        if not server_configuration["queue_songs"] or len(server_configuration["queue_songs"]) == 0:
-            self._log_message("No hay cola de canciones")
-            return
-        
-        if server_configuration["current_index"] == len(server_configuration["queue_songs"]) :
-            await view.create_embeds(is_last_song=True)
-            self._log_message("Ya no hay canciones")           
-            return  
-   
-        if server_configuration["is_shuffle"]:
-            try:
-                if len(server_configuration["index_shuffle"]) == len(server_configuration["queue_songs"]):
-                    await view.create_embeds(is_last_song=True)
-                    self._log_message("Ya no hay canciones")           
-                    return
-                
-                server_configuration["current_index"] = random_int(0, len(server_configuration["queue_songs"]) - 1, server_configuration["index_shuffle"])
-                print(server_configuration["current_index"])
-                server_configuration["index_shuffle"].append(server_configuration["current_index"])
-                song = server_configuration["queue_songs"][server_configuration["current_index"]]
-                self._log_message(f"Reproduciendo {song["title"]}")
-                
-                await view.create_embeds(song)
-                self.embed = await view.update_message()
-                player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG_OPTIONS)
-                voice_client = server_configuration.get("voice_channel")
-                voice_client.play(player, after=lambda e: self.safe_play_next(guild_id,view, server_configuration))
-            except Exception as e:
-                self._error_message(e)
-        else:
-            try:
-                song = server_configuration["queue_songs"][server_configuration["current_index"]]
-                self._log_message(f"Reproduciendo {song["title"]}")
-                
-                await view.create_embeds(song)
-                self.embed = await view.update_message()
-                player = discord.FFmpegPCMAudio(song["song"], **self.FFMPEG_OPTIONS)
-                voice_client = server_configuration.get("voice_channel")
-                voice_client.play(player, after=lambda e: self.safe_play_next(guild_id,view, server_configuration))
-            except Exception as e:
-                self._error_message(e)
-        
-    def safe_play_next(self, guild_id,view: MusicView, server_configuration):
-        if not server_configuration["is_shuffle"]:
-            server_configuration["current_index"] += 1
-        if server_configuration["is_stopped"]:
-            return
-        loop = self.bot.loop  
-
-        if loop.is_closed():
-            self._error_message("Event loop is closed. Cannot schedule play_next.")
-            return
-
-        future = asyncio.run_coroutine_threadsafe(self.play_next(guild_id, view), loop)
-        try:
-            future.result()
-        except Exception as e:
-            self._error_message(e)
-        
-    async def analyze_url(self, url):
-        splited_url = url.split(".")
-        if self.music_provider.YOUTUBE in splited_url:
-            if len(splited_url[2].split("&")) > 1:
-                return self.music_provider.YOUTUBE_PLAYLIST
-            return self.music_provider.YOUTUBE
-        elif self.music_provider.SPOTIFY in splited_url:
-            if splited_url[2].split("/")[1].startswith("playlist"):
-                return self.music_provider.SPOTIFY_PLAYLIST
-            elif splited_url[2].split("/")[1].startswith("album"):
-                return self.music_provider.SPOTIFY_ALBUM
-            return self.music_provider.SPOTIFY
-        else:
-            return None
-             
-
     def run(self):
         
         @self.bot.event
         async def on_ready():
             self._log_message(f"Logged in as {self.bot.user}")
+            
         
         @self.bot.event
         async def on_message(message):
@@ -188,108 +115,56 @@ class LactomedaDiscord(LactomedaModule):
             if message.author.name in [SpecialNames.BELOVED,SpecialNames.BELOVED_2ND]:
                     await message.add_reaction("❤️")
             
-
+            if re.search(r'\blactomeda\b', message.content, re.IGNORECASE):    
+                self.ai_client.initialize(message.guild.id)
+                prompt = message.content + " (author: " + message.author.name + ")"
+                response = self.ai_client.send_prompt(prompt)
+                res = response.choices[0].message.content
+                print(res)          
+                try:
+                    res_cleaned = re.sub(r"^```json|\n```$", "", res.strip())                
+                    dict_data = json.loads(res_cleaned)
+                    lactomeda_response = dict_data["response"]
+                    command_name = dict_data["command"] if dict_data["command"] else None
+                    command_args = dict_data["command_args"] if dict_data["command_args"] else None
+                except json.JSONDecodeError as e:
+                     
+                    lactomeda_response = "Uuughhh ha habido un error en mi código, nuevo ... Deja que Josué me corrija"
+                    command_name = None
+                    command_args = None
+                    print("error decoding json", repr(res_cleaned))
+                
+                await message.reply(lactomeda_response)  
+                
+                if command_name == None:
+                    print("No detectó el comando, tal vez no haya")
+                elif command_name == constants.DiscordCommands.LACTOMEDA_ORDERS["/play"]:
+                    fake_interaction = FakeInteraction(self.bot, message)
+                    await self.join_voice(fake_interaction)
+                    if command_args: 
+                        for arg in command_args:
+                            query = arg
+                            await play_command(fake_interaction, self.bot, query)
+                            
+                    else: 
+                        query = "creed Higher"
+                        await play_command(fake_interaction, self.bot, query)
+                elif command_name == constants.DiscordCommands.LACTOMEDA_ORDERS["/debug"]:
+                    pass
+                elif command_name == constants.DiscordCommands.LACTOMEDA_ORDERS["join"]:
+                    fake_interaction = FakeInteraction(self.bot, message)
+                    # await interaction.response.defer()
+                    await self.join_voice(fake_interaction)
+                    
         
         @self.bot.slash_command(name="play")
         async def play(interaction: discord.Interaction, query: str):
             """URL de la musica"""
-            guild_id = interaction.guild.id
-            server_configuration = self.lactomeda_setup.get_server_config(guild_id)
-            songs = []
-            titles = []
-            spotify_songs = []
-            playlist = None
-            is_spotify_playlist = False
-            server_configuration["is_stopped"] = False
-        
             await self.join_voice(interaction)
-            voice_client = server_configuration.get("voice_channel")
 
-            # if guild_id not in self.queue_songs:
-            #     self.queue_songs[guild_id] = deque()
-                
-            await interaction.response.defer()
-            
-            music_provider = await self.analyze_url(query)
-            
-            match music_provider:
-                case self.music_provider.YOUTUBE:
-                    song, title, artist, duration, img_url = await self.downloader.yt_download(query)
-                
-                case self.music_provider.YOUTUBE_PLAYLIST:
-                    playlist = query
-                    query = query.split("&")[0]
-                    song, title, artist, duration, img_url = await self.downloader.yt_download(query)
-
-                case self.music_provider.SPOTIFY:
-                    song_name = self.downloader.get_spotify_song_name(query)
-                    song, title,artist, duration, img_url = await self.downloader.yt_download(song_name)
-                
-                case self.music_provider.SPOTIFY_ALBUM:
-                    is_spotify_playlist = True
-                    results = await self.downloader.get_spotify_tracks_from_album(query)
-                    for track in results['items']:
-                        track_name = track['name']
-                        artist_name = track['artists'][0]['name']
-                        spotify_songs.append(f"{track_name} - {artist_name}")
-                        
-                    song_name = spotify_songs.pop(0)
-                    song, title, artist, duration, img_url = await self.downloader.yt_download(song_name)
-                
-                case self.music_provider.SPOTIFY_PLAYLIST:
-                    is_spotify_playlist = True
-                    results = await self.downloader.get_spotify_names_from_playlist(query)
-                    for item in results['items']:
-                        track = item['track']
-                        track_name = track['name']
-                        artist_name = track['artists'][0]['name']
-                        spotify_songs.append(f"{track_name} - {artist_name}")
-                    song_name = spotify_songs.pop(0)
-                    song, title,artist, duration, img_url = await self.downloader.yt_download(song_name)
-                
-                case None:
-                    song, title, artist, duration, img_url  = await self.downloader.yt_download(query)
-            
-            
-            server_configuration["queue_songs"].append(
-                {"title":title, "song":song, "artist":artist, "duration":duration, "img_url":img_url}
-            )
-            
-            #pendiente reemplazar la queue con el que haya en el server_config
-            # asegurarse de que todo funcione como antes
-            if not voice_client.is_playing():
-                
-                view = MusicView(self.bot , server_configuration)
-                await view.send_initial_message(interaction)
-                task = asyncio.create_task(self.play_next(guild_id, view))
-                # task.add_done_callback(lambda t: self._log_message("En espera de música"))
-            if is_spotify_playlist:
-                for song in spotify_songs:
-                    song, title,artist, duration, img_url = await asyncio.create_task(self.downloader.yt_download(song))
-                    server_configuration["queue_songs"].append(
-                        {"title":title, "song":song, "artist":artist, "duration":duration, "img_url":img_url}
-                        )
-                
-                self._log_message(f"Playlist Agregada")
-                await interaction.followup.send("Playlist Agregada",ephemeral=True)
-            
-            if playlist:
-                songs, titles, artists, durations, imgs_urls = await self.downloader.yt_download(playlist, is_playlist=True)
-                
-                for i,song in enumerate(songs):
-                    server_configuration["queue_songs"].append({"title":titles[i], "song":song, "artist":artists[i], "duration":durations[i], "img_url":imgs_urls[i]})
-
-                self._log_message(f"Musica Agregada: {title}")
-                await interaction.followup.send(f"Musica Agregada: {title}",ephemeral=True)
-            
-            elif not playlist and not is_spotify_playlist:
-                self._log_message(f"Musica Agregada: {title}")
-                await interaction.followup.send(f"Musica Agregada: {title}",ephemeral=True)
+            await play_command(interaction, self.bot, query)
             
 
-                
- 
-        
         @self.bot.slash_command(name="debug")
         async def debug(interaction: discord.Interaction):
             try:
