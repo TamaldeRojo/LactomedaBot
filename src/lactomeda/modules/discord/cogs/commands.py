@@ -45,7 +45,7 @@ async def play_next(guild_id, view: MusicView, embed = None):
             print(f"Reproduciendo {song["title"]}")
             
             await view.create_embeds(song)
-            embed = await view.update_message()
+            await view.update_message()
             player = discord.FFmpegPCMAudio(song["song"], **FFMPEG_OPTIONS)
             voice_client = server_configuration.get("voice_channel")
             voice_client.play(player, after=lambda e: safe_play_next(guild_id,view, server_configuration))
@@ -57,7 +57,7 @@ async def play_next(guild_id, view: MusicView, embed = None):
             print(f"Reproduciendo {song["title"]}")
             
             await view.create_embeds(song)
-            embed = await view.update_message()
+            await view.update_message()
             player = discord.FFmpegPCMAudio(song["song"], **FFMPEG_OPTIONS)
             voice_client = server_configuration.get("voice_channel")
             voice_client.play(player, after=lambda e: safe_play_next(guild_id,view, server_configuration))
@@ -154,7 +154,7 @@ async def play_command(interaction, bot, query):
         
         view = MusicView(bot , server_configuration)
         await view.send_initial_message(interaction)
-        task = asyncio.create_task(play_next(guild_id, view))
+        asyncio.create_task(play_next(guild_id, view))
         # task.add_done_callback(lambda t: self._log_message("En espera de música"))
     if is_spotify_playlist:
         for song in spotify_songs:
@@ -163,10 +163,11 @@ async def play_command(interaction, bot, query):
                 {"title":title, "song":song, "artist":artist, "duration":duration, "img_url":img_url}
                 )
         
-        print(f"Playlist Agregada")
+        print("Playlist Agregada")
         try:
             await interaction.followup.send(f"Musica Agregada: {title}",ephemeral=True)
-        except:
+        except (discord.HTTPException, discord.NotFound) as e:
+            print(f"Error enviando mensaje de seguimiento: {e}")
             await default_music_channel.send(f"Musica Agregada: {title}",delete_after=5)
     
     if playlist:
@@ -178,7 +179,8 @@ async def play_command(interaction, bot, query):
         print(f"Musica Agregada: {title}")
         try:
             await interaction.followup.send(f"Musica Agregada: {title}",ephemeral=True)
-        except:
+        except (discord.HTTPException, discord.NotFound) as e:
+            print(f"Error enviando mensaje de seguimiento: {e}")
             await default_music_channel.send(f"Musica Agregada: {title}",delete_after=5)
     
     elif not playlist and not is_spotify_playlist:
@@ -186,7 +188,8 @@ async def play_command(interaction, bot, query):
         try:
             print(f"Musica Agregada: {title}")
             await interaction.followup.send(f"Musica Agregada: {title}",ephemeral=True)
-        except:
+        except (discord.HTTPException, discord.NotFound) as e:
+            print(f"Error enviando mensaje de seguimiento: {e}")
             await default_music_channel.send(f"Musica Agregada: {title}",delete_after=5)
             
 async def debug(self, ctx):

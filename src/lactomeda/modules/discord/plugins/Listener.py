@@ -1,5 +1,4 @@
-from lactomeda.modules.base import LactomedaModule
-import asyncio, io, discord, openai
+import io
 
 class Listener():
     

@@ -1,5 +1,3 @@
-import asyncio
-import discord
 from openai import OpenAI
 from lactomeda.config.ai_response import AIResponse
 from lactomeda.config.lactomeda_config import LactomedaConfig

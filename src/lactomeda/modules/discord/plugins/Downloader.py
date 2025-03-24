@@ -1,4 +1,6 @@
-import asyncio, discord, yt_dlp, spotipy
+import asyncio 
+import yt_dlp
+import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import re
 from lactomeda.config.constants import Denials

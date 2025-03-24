@@ -19,7 +19,8 @@ class MusicView(discord.ui.View):
         initial_embed = await self.create_embeds(first_song)
         try:
             self.message = await interaction.followup.send(embed=initial_embed, view=self)
-        except:
+        except Exception as e:
+            print(e)
             self.message = await self.default_music_channel.send(embed=initial_embed, view=self)
 
     async def create_embeds(self, song: deque = None, is_last_song: bool = False) -> discord.Embed:

@@ -1,5 +1,5 @@
 import discord
-from discord import InteractionType, InteractionType
+from discord import InteractionType
 from lactomeda.config.lactomeda_config import LactomedaConfig
 # Create a fake interaction to execute the slash commands xd
 
@@ -7,7 +7,7 @@ lactomeda_setup = LactomedaConfig.get_instance()
 class FakeInteraction(discord.Interaction):
     def __init__(self, bot, message):
         
-        server_configuration = lactomeda_setup.get_server_config(message.guild.id)
+        lactomeda_setup.get_server_config(message.guild.id)
         data = {
             "id": message.id,  # Use the message ID or any unique identifier
             "type": InteractionType.application_command,  # Type of interaction (e.g., slash command)

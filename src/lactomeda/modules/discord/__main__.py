@@ -1,19 +1,18 @@
 import asyncio
-from collections import deque
-import json
 import re
+import discord 
+import torch 
+import whisper
+import os
 from lactomeda.config import constants
-from lactomeda.config.constants import Language, MusicProvider, MusicURL, SpecialNames
+from lactomeda.config.constants import SpecialNames
 from lactomeda.modules.base import LactomedaModule
 from lactomeda.modules.discord.cogs.commands import play_command
 from lactomeda.modules.discord.cogs.messages import lactomeda_response
 from lactomeda.modules.discord.plugins.Listener import Listener 
 from lactomeda.modules.discord.plugins.ai_client import AIClient
-from lactomeda.modules.discord.views.music import MusicView
-import discord, torch, whisper, os
 from lactomeda.config.lactomeda_config import LactomedaConfig
 from utils.fake_interaction import FakeInteraction
-from utils.random_int import random_int
 
 
 class LactomedaDiscord(LactomedaModule):
@@ -28,16 +27,14 @@ class LactomedaDiscord(LactomedaModule):
         self.bot = discord.Bot(intents=self.intents)
         self.lactomeda_setup.bot_loop = self.bot.loop
         
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # print(f"Using {device} device")
-        # self.model = whisper.load_model("small").to(device)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Using {device} device")
+        self.model = whisper.load_model("small").to(device)
         
         self.ai_client = AIClient()
-        self.voice_channel = {}
         
     
     async def join_voice(self, interaction: discord.Interaction):
-        server_configuration = self.lactomeda_setup.get_server_config(interaction.guild.id)
         if interaction.user.voice is None:
             await interaction.channel.send("No estas en un canal de voz")
             return
@@ -46,7 +43,6 @@ class LactomedaDiscord(LactomedaModule):
             voice_client = await interaction.user.voice.channel.connect()
             
             self.lactomeda_setup.update_server_config(interaction.guild.id, "voice_channel", voice_client) 
-            # self.voice_channel[voice_client.guild.id] = voice_client
             self._log_message("Conectado a un canal de voz")
             
             # try:
@@ -96,10 +92,7 @@ class LactomedaDiscord(LactomedaModule):
                     
     #         sink.audio_data.clear()
                                      
-    # async def execute_slash_command(self, interaction):
-    #     command = self.bot.get_application_command('play')
-    #     if command:
-    #         await play_command(interaction, self.bot, args[0] if args else "")
+   
     
     def run(self):
         
@@ -108,6 +101,7 @@ class LactomedaDiscord(LactomedaModule):
             self._log_message(f"Logged in as {self.bot.user}")
             for guild in self.bot.guilds:
                 self._log_message(f"Inizializando la configuración de la guild: {guild.name}: {guild.id}")
+                self.lactomeda_setup.get_server_config(guild.id)
                 self.ai_client.initialize(guild.id)
             
         
@@ -140,7 +134,7 @@ class LactomedaDiscord(LactomedaModule):
                 lactomeda_res, command_name, command_args = lactomeda_response(self.ai_client, message,conversation_history)
                 await message.reply(lactomeda_res)  
 
-                if command_name == None:
+                if command_name is None:
                     print("No detectó el comando, tal vez no haya")
                     return
                 elif command_name == constants.DiscordCommands.LACTOMEDA_ORDERS["/play"]:
