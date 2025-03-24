@@ -86,7 +86,7 @@ async def play_command(interaction, bot, query):
     guild_id = interaction.guild.id
     server_configuration = lactomeda_setup.get_server_config(guild_id)
     music_channel_id = server_configuration.get("default_music_channel")
-    default_music_channel: discord.TextChannel = bot.get_channel(music_channel_id)
+    default_music_channel: discord.TextChannel = bot.get_channel(music_channel_id) if bot.get_channel(music_channel_id) else bot.get_channel(interaction.channel.id)
     
     
     songs = []
@@ -152,7 +152,7 @@ async def play_command(interaction, bot, query):
 
     if not voice_client.is_playing():
         
-        view = MusicView(bot , server_configuration)
+        view = MusicView(bot , server_configuration, interaction.channel.id)
         await view.send_initial_message(interaction)
         asyncio.create_task(play_next(guild_id, view))
         # task.add_done_callback(lambda t: self._log_message("En espera de música"))

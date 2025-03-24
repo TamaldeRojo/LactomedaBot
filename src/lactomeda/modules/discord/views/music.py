@@ -3,12 +3,12 @@ from collections import deque
 from lactomeda.config.constants import AltImgs
 
 class MusicView(discord.ui.View): 
-    def __init__(self, bot , server_configuration):
+    def __init__(self, bot , server_configuration, current_channel_id):
         super().__init__(timeout=None)
         self.bot = bot
         self.server_configuration = server_configuration
         music_channel_id = server_configuration.get("default_music_channel")
-        self.default_music_channel = bot.get_channel(music_channel_id)
+        self.default_music_channel = bot.get_channel(music_channel_id) if bot.get_channel(music_channel_id) else bot.get_channel(current_channel_id)
         self.embed_index = 0
         self.embeds = []
         self.message = None  

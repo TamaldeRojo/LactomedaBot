@@ -107,9 +107,10 @@ class LactomedaDiscord(LactomedaModule):
         
         @self.bot.event
         async def on_message(message):
+            if message.guild is None:
+                return
             server_configuration = self.lactomeda_setup.get_server_config(message.guild.id)
             conversation_history = server_configuration["conversation_history"]
-
             if message.author.bot:
                 conversation_history.append({message.author.name : message.content})                
                 return            

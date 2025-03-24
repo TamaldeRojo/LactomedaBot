@@ -54,7 +54,7 @@ class LactomedaConfig:
             "index_shuffle": deque(),
             "is_back_skip": False,
             "conversation_history": deque(),
-            "default_music_channel": 1352430281390555199#1071894534021189803
+            "default_music_channel": None#1352430281390555199#1071894534021189803
         }
     
     def __init__(self):
