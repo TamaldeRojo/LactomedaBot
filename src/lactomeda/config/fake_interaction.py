@@ -4,6 +4,8 @@ from lactomeda.config.lactomeda_config import LactomedaConfig
 # Create a fake interaction to execute the slash commands xd
 
 lactomeda_setup = LactomedaConfig.get_instance()
+
+
 class FakeInteraction(discord.Interaction):
     def __init__(self, bot, message):
         
@@ -27,12 +29,13 @@ class FakeInteraction(discord.Interaction):
         super().__init__(data=data, state=bot._connection)
         self.bot = bot
         self._guild = message.guild
-        self._channel = message.channel
+        self.channel = message.channel
         self.user = message.author
         self.response = FakeResponse(self)
     
     async def response_defer(self):
         pass  # Simulate interaction defer
+   
     
 class FakeResponse(discord.InteractionResponse):
     def __init__(self,interaction):

@@ -5,7 +5,7 @@ from lactomeda.config.lactomeda_config import LactomedaConfig
 from lactomeda.modules.discord.plugins.Downloader import Downloader
 from lactomeda.config.constants import MusicProvider
 from lactomeda.modules.discord.views.music import MusicView
-from utils import fake_interaction
+from lactomeda.config import fake_interaction
 from utils.random_int import random_int
 from utils.url_analyzer import analyze_url
 
@@ -19,7 +19,6 @@ FFMPEG_OPTIONS = {
 
 async def play_next(guild_id, view: MusicView, embed = None):
     server_configuration = lactomeda_setup.get_server_config(guild_id)
-
     if not server_configuration["queue_songs"] or len(server_configuration["queue_songs"]) == 0:
         print("No hay cola de canciones")
         return
@@ -29,8 +28,8 @@ async def play_next(guild_id, view: MusicView, embed = None):
         print("Ya no hay canciones")           
         return  
 
-    if server_configuration["is_shuffle"]:
-        try:
+    try:
+        if server_configuration["is_shuffle"]:
             if len(server_configuration["index_shuffle"]) == len(server_configuration["queue_songs"]):
                 await view.create_embeds(is_last_song=True)
                 print("Ya no hay canciones")           
@@ -41,48 +40,42 @@ async def play_next(guild_id, view: MusicView, embed = None):
                 server_configuration["is_back_skip"] = False
 
             server_configuration["index_shuffle"].append(server_configuration["current_index"])
-            song = server_configuration["queue_songs"][server_configuration["current_index"]]
-            print(f"Reproduciendo {song["title"]}")
-            
-            await view.create_embeds(song)
-            await view.update_message()
-            player = discord.FFmpegPCMAudio(song["song"], **FFMPEG_OPTIONS)
-            voice_client = server_configuration.get("voice_channel")
-            voice_client.play(player, after=lambda e: safe_play_next(guild_id,view, server_configuration))
-        except Exception as e:
-            print(e)
-    else:
-        try:
-            song = server_configuration["queue_songs"][server_configuration["current_index"]]
-            print(f"Reproduciendo {song["title"]}")
-            
-            await view.create_embeds(song)
-            await view.update_message()
-            player = discord.FFmpegPCMAudio(song["song"], **FFMPEG_OPTIONS)
-            voice_client = server_configuration.get("voice_channel")
-            voice_client.play(player, after=lambda e: safe_play_next(guild_id,view, server_configuration))
-        except Exception as e:
-            print(e)
-
-def safe_play_next(guild_id,view: MusicView, server_configuration):
-    if not server_configuration["is_shuffle"]:
-        server_configuration["current_index"] += 1
-    if server_configuration["is_stopped"]:
-        return
-    
-    try:
-        loop = lactomeda_setup.get_bot_loop()
-        future = asyncio.run_coroutine_threadsafe(play_next(guild_id, view), loop)
-        future.result()
-    except RuntimeError:
-        print("Event loop is closed. Cannot schedule play_next.")
-        return
+        
+        
+        song = server_configuration["queue_songs"][server_configuration["current_index"]]
+        await _play_song(song, server_configuration,view,guild_id)
     except Exception as e:
         print(e)
-      
 
+
+async def _play_song(song,server_configuration,view,guild_id):
+    print(f"Reproduciendo {song["title"]}")
+    await view.create_embeds(song)
+    await view.update_message()
+    player = discord.FFmpegPCMAudio(song["song"], **FFMPEG_OPTIONS)
+    voice_client = server_configuration.get("voice_channel")
+    
+    loop = asyncio.get_event_loop()
+    def after_play(error):
+        if error:
+            print(f"Error occurred in after_play: {error}")
+        if not server_configuration["is_shuffle"]:
+            server_configuration["current_index"] += 1
+        if server_configuration["is_stopped"]:
+            return
+        
+        try:
+            print("calling play_next")
+            coro = play_next(guild_id, view)
+            asyncio.run_coroutine_threadsafe(coro, loop)
+        except Exception as e:
+            print(f"Error occurred in after_play: {e}")
+    
+    voice_client.play(player, after=after_play)
+    
 
 async def play_command(interaction, bot, query):
+    # print(interaction.__dict__)
     guild_id = interaction.guild.id
     server_configuration = lactomeda_setup.get_server_config(guild_id)
     music_channel_id = server_configuration.get("default_music_channel")
@@ -103,7 +96,6 @@ async def play_command(interaction, bot, query):
     elif isinstance(interaction, fake_interaction.FakeInteraction):
         await interaction.response.send("⏳ Dame un momento que busque tu musica...", delete_after=5)
         
-    await interaction.response.defer()
     music_provider = await analyze_url(query)
 
     

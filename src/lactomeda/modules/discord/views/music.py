@@ -79,7 +79,7 @@ class MusicView(discord.ui.View):
         return self.embeds[self.embed_index]
 
     @discord.ui.button(label="Pausa", style=discord.ButtonStyle.gray)
-    async def pause(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def pause(self,   interaction: discord.Interaction, button: discord.ui.Button):
         voice_client = discord.utils.get(self.bot.voice_clients, guild=interaction.guild)
         if voice_client and voice_client.is_playing():
             print("[+] Pausando la música")
@@ -91,7 +91,7 @@ class MusicView(discord.ui.View):
             await interaction.response.edit_message(content="❌ La musica no pudo ser pausada",view=self)
 
     @discord.ui.button(label="Reanudar", style=discord.ButtonStyle.blurple)
-    async def resume(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def resume(self,   interaction: discord.Interaction, button: discord.ui.Button):
         voice_client = discord.utils.get(self.bot.voice_clients, guild=interaction.guild)
         if voice_client and voice_client.is_paused():
             print("[+] Reanudando la música")
@@ -102,9 +102,8 @@ class MusicView(discord.ui.View):
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser reanudada",view=self)
             
-            
     @discord.ui.button(label="Detener", style=discord.ButtonStyle.red)
-    async def stop(self,  button: discord.ui.Button, interaction: discord.Interaction):
+    async def stop(self,    interaction: discord.Interaction, button: discord.ui.Button):
         voice_client = discord.utils.get(self.bot.voice_clients, guild=interaction.guild)
         if voice_client and voice_client.is_playing():
             
@@ -123,7 +122,7 @@ class MusicView(discord.ui.View):
             await interaction.response.edit_message(content="❌ La musica no pudo ser detenida",view=self)
             
     @discord.ui.button(label="<<", style=discord.ButtonStyle.gray, row=1)
-    async def skip_back(self,  button: discord.ui.Button, interaction: discord.Interaction):
+    async def skip_back(self,    interaction: discord.Interaction, button: discord.ui.Button):
         voice_client = discord.utils.get(self.bot.voice_clients, guild=interaction.guild)
         if voice_client and voice_client.is_playing():
             print("[+] Reproduciendo la música anterior")
@@ -134,15 +133,18 @@ class MusicView(discord.ui.View):
                     self.server_configuration["current_index"] = -1
             else:
                 self.server_configuration["is_back_skip"] = True
-                self.server_configuration["index_shuffle"].pop()
-                self.server_configuration["current_index"] = self.server_configuration["index_shuffle"].pop()
+                if len(self.server_configuration["index_shuffle"]) >= 2:
+                    self.server_configuration["index_shuffle"].pop()
+                    self.server_configuration["current_index"] = self.server_configuration["index_shuffle"].pop()
+                else: 
+                    self.server_configuration["current_index"] = self.server_configuration["index_shuffle"].pop()
+                    
             await interaction.response.edit_message(content="✔ Reproduciendo la música anterior",view=self)
         else:
             await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
 
-
     @discord.ui.button(label=">>", style=discord.ButtonStyle.gray, row=1)
-    async def skip_front(self,  button: discord.ui.Button, interaction: discord.Interaction):
+    async def skip_front(self,interaction: discord.Interaction, button: discord.ui.Button ):
         voice_client = discord.utils.get(self.bot.voice_clients, guild=interaction.guild)
         if voice_client and voice_client.is_playing():
             print("[+] Saltando la música")
@@ -152,7 +154,7 @@ class MusicView(discord.ui.View):
             await interaction.response.edit_message(content="❌ La musica no pudo ser Adelantada",view=self)
 
     @discord.ui.button(label="Aleatorio", style=discord.ButtonStyle.gray, row=1)
-    async def shuffle_queue(self,  button: discord.ui.Button, interaction: discord.Interaction):
+    async def shuffle_queue(self,  interaction: discord.Interaction, button: discord.ui.Button):
         if len(self.server_configuration["queue_songs"]) > 0:
             self.server_configuration["is_shuffle"] = True
             last_song_indexes = list(range(self.server_configuration["current_index"] + 1))
@@ -162,10 +164,8 @@ class MusicView(discord.ui.View):
         else:
             await interaction.response.edit_message(content="❌ Trabajo en ello okay?",view=self)
 
-    
-    
     @discord.ui.button(label="🔲", style=discord.ButtonStyle.gray, row=1)
-    async def view_queue(self,  button: discord.ui.Button, interaction: discord.Interaction):
+    async def view_queue(self,  interaction: discord.Interaction, button: discord.ui.Button):
         if len(self.server_configuration["queue_songs"]) > 0:
             await interaction.response.edit_message(content="En progreso...",view=self)
         else:

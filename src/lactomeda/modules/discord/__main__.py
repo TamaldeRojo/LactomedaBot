@@ -1,6 +1,8 @@
 import asyncio
 import re
 import discord 
+from discord.ext import commands
+from discord import app_commands
 import torch 
 import whisper
 import os
@@ -9,10 +11,9 @@ from lactomeda.config.constants import SpecialNames
 from lactomeda.modules.base import LactomedaModule
 from lactomeda.modules.discord.cogs.commands import play_command
 from lactomeda.modules.discord.cogs.messages import lactomeda_response
-from lactomeda.modules.discord.plugins.Listener import Listener 
 from lactomeda.modules.discord.plugins.ai_client import AIClient
 from lactomeda.config.lactomeda_config import LactomedaConfig
-from utils.fake_interaction import FakeInteraction
+from lactomeda.config.fake_interaction import FakeInteraction
 
 
 class LactomedaDiscord(LactomedaModule):
@@ -24,8 +25,9 @@ class LactomedaDiscord(LactomedaModule):
         self.intents = discord.Intents.default()
         self.intents.message_content = True
         self.intents.voice_states = True
-        self.bot = discord.Bot(intents=self.intents)
-        self.lactomeda_setup.bot_loop = self.bot.loop
+        self.bot = commands.Bot(command_prefix="!", intents=self.intents)
+        
+        self.lactomeda_setup.bot_loop = None
         
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Using {device} device")
@@ -45,53 +47,7 @@ class LactomedaDiscord(LactomedaModule):
             self.lactomeda_setup.update_server_config(interaction.guild.id, "voice_channel", voice_client) 
             self._log_message("Conectado a un canal de voz")
             
-            # try:
-            #     asyncio.create_task(self.listener_handler(voice_client))
-            # except Exception as e:
-            #     self._error_message(e)
-            # return voice_client
-    
-    # async def listener_handler(self, voice_client):
-    #     sink = discord.sinks.MP3Sink()
-        
-    #     def finished_callback(sink, *args):
-    #         print("Finalizado")
-            
-    #     while voice_client.is_connected():
-    #         print("Iniciando escucha")
-    #         voice_client.start_recording(sink, finished_callback)
-    #         print("Iniciando sleep") 
-    #         await asyncio.sleep(5)
-            
-    #         print("Parando escucha")
-    #         voice_client.stop_recording()
-            
-    #         await asyncio.sleep(2)
-            
-    #         audio_bytes = sink.get_all_audio()
-            
-    #         if not audio_bytes:
-    #             print(f"No hay audio  {audio_bytes}")	
-    #             continue
-            
-    #         # print("Escuchando", audio_bytes[0].getvalue())
-    #         with open("temp_audio.mp3", "wb") as f:
-    #             f.write(audio_bytes[0].getvalue())
-    #             print("Archivo abierto")
-                
-    #         if os.stat("temp_audio.mp3").st_size == 0:
-    #             print("Archivo vacio")
-    #             continue
-            
-    #         result = self.model.transcribe("temp_audio.mp3",language=Language.ES)
-    #         text = result["text"].strip()
-    #         if text:
-    #             print(f"Escuché: {text}")
-    #             if "hola" in text.lower():
-    #                 print("Hola!, te escucho correctamente")
-                    
-    #         sink.audio_data.clear()
-                                     
+  
    
     
     def run(self):
@@ -99,6 +55,7 @@ class LactomedaDiscord(LactomedaModule):
         @self.bot.event
         async def on_ready():
             self._log_message(f"Logged in as {self.bot.user}")
+            await self.bot.tree.sync()
             for guild in self.bot.guilds:
                 self._log_message(f"Inizializando la configuración de la guild: {guild.name}: {guild.id}")
                 self.lactomeda_setup.get_server_config(guild.id)
@@ -157,15 +114,14 @@ class LactomedaDiscord(LactomedaModule):
                     await self.join_voice(fake_interaction)
                     
         
-        @self.bot.slash_command(name="play")
+        @self.bot.tree.command(name="play", description="URL de la musica")
         async def play(interaction: discord.Interaction, query: str):
-            """URL de la musica"""
             await self.join_voice(interaction)
 
             await play_command(interaction, self.bot, query)
             
 
-        @self.bot.slash_command(name="debug")
+        @self.bot.tree.command(name="debug")
         async def debug(interaction: discord.Interaction):
             try:
                 await self.join_voice(interaction)
@@ -173,7 +129,7 @@ class LactomedaDiscord(LactomedaModule):
                 # self._log_message(f"Index: {self.current_index[0]}")
                 server_configuration = self.lactomeda_setup.get_server_config(interaction.guild.id)
                 print(server_configuration)
-                print(server_configuration["conversation_history"])
+                # print(server_configuration["conversation_history"])
                 # self._log_message([song['title'] for song in server_configuration["queue_songs"]])    
                 # # self._log_message(asyncio.all_tasks()) 
                 # await interaction.followup.send([song['title'] for song in self.queue_songs[interaction.guild.id]])
